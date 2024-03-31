@@ -18,7 +18,7 @@
     <section class="main">
       <ul class="todo-list">
         <li
-          *ngFor="let task of tasks(); index as i"
+          *ngFor="let task of taskByFilter(); index as i"
           [class.completed]="task.completed"
           [class.editing]="task.editing"
           (dblclick)="updateTask(i)"
@@ -46,23 +46,25 @@
     <footer class="footer">
       <!-- This should be `0 items left` by default -->
       <span class="todo-count">
-        <strong>{{ tasks().length }}</strong>
-        {{ tasks().length <= 1 ? " item" : " items" }} left
+        <strong>{{ taskByFilter().length }}</strong>
+        {{ taskByFilter().length <= 1 ? " item" : " items" }} left
       </span>
       <!-- Remove this if you don't implement routing -->
       <ul class="filters">
         <li>
-          <a routerLink="/" class="selected">All</a>
+          <a (click)="changeFilter(filterTask.All)">All</a>
         </li>
         <li>
-          <a routerLink="/pending">Pending</a>
+          <a (click)="changeFilter(filterTask.Pending)">Pending</a>
         </li>
         <li>
-          <a routerLink="/completed">Completed</a>
+          <a (click)="changeFilter(filterTask.Completed)">Completed</a>
         </li>
       </ul>
       <!-- Hidden if no completed items are left ↓ -->
-      <button class="clear-completed">Clear completed</button>
+      <button (click)="removeCompleted()" class="clear-completed">
+        Clear completed
+      </button>
     </footer>
   </div>
 </section>

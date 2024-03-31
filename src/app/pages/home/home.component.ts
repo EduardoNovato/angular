@@ -1,7 +1,14 @@
 import { JsonPipe, NgFor } from '@angular/common';
-import { Component, signal, ViewChild, ElementRef } from '@angular/core';
+import {
+  Component,
+  signal,
+  ViewChild,
+  ElementRef,
+  computed,
+} from '@angular/core';
 import { Task } from '../../models/task.interface';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FilterTask } from '../../models/filterTask';
 
 @Component({
   selector: 'app-home',
@@ -14,10 +21,26 @@ export class HomeComponent {
   @ViewChild('editInput', { static: false })
   editInputRef!: ElementRef<HTMLInputElement>;
 
+  filterTask = FilterTask;
+
   tasks = signal<Task[]>([
     { id: Date.now(), title: 'Task 1', completed: false },
     { id: Date.now(), title: 'Task 2', completed: true },
   ]);
+
+  filter = signal<FilterTask>(FilterTask.All);
+  taskByFilter = computed(() => {
+    const filter = this.filter();
+    const tasks = this.tasks();
+    switch (filter) {
+      case FilterTask.Pending:
+        return tasks.filter((task) => !task.completed);
+      case FilterTask.Completed:
+        return tasks.filter((task) => task.completed);
+      default:
+        return tasks;
+    }
+  });
 
   newTaskControl = new FormControl('', {
     nonNullable: true,
@@ -72,5 +95,13 @@ export class HomeComponent {
         )
       );
     }
+  }
+
+  changeFilter(filter: FilterTask) {
+    this.filter.set(filter);
+  }
+
+  removeCompleted() {
+    this.tasks.update((tasks) => tasks.filter((task) => !task.completed));
   }
 }
