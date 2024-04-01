@@ -5,10 +5,15 @@ import {
   ViewChild,
   ElementRef,
   computed,
+  OnInit,
 } from '@angular/core';
 import { Task } from '../../models/task.interface';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { FilterTask } from '../../models/filterTask';
+import { TaskServiceService } from '../../services/task-service.service';
+import { Firestore } from '@angular/fire/firestore';
+import { addDoc, collection, getDoc, getDocs } from 'firebase/firestore';
+import { Observable } from 'rxjs';
 
 @Component({
   selector: 'app-home',
@@ -17,16 +22,15 @@ import { FilterTask } from '../../models/filterTask';
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
 })
-export class HomeComponent {
+export class HomeComponent implements OnInit {
   @ViewChild('editInput', { static: false })
   editInputRef!: ElementRef<HTMLInputElement>;
 
   filterTask = FilterTask;
+  tasks$: Observable<Task[]>;
+  filter$: Observable<FilterTask>;
 
-  tasks = signal<Task[]>([
-    { id: Date.now(), title: 'Task 1', completed: false },
-    { id: Date.now(), title: 'Task 2', completed: true },
-  ]);
+  tasks = signal<Task[]>([]);
 
   filter = signal<FilterTask>(FilterTask.All);
   taskByFilter = computed(() => {
@@ -47,23 +51,42 @@ export class HomeComponent {
     validators: [Validators.required],
   });
 
+  constructor(
+    private taskService: TaskServiceService,
+    private fireStore: Firestore
+  ) {
+    this.tasks$ = this.taskService.tasks$;
+    this.filter$ = this.taskService.filter$;
+  }
+
+  ngOnInit(): void {
+    this.loadTasksFromFirestore();
+  }
+
+  async loadTasksFromFirestore() {
+    const tasksCollection = collection(this.fireStore, 'tasks');
+    const tasksSnapshot = await getDocs(tasksCollection);
+    const tasks: Task[] = tasksSnapshot.docs.map((doc) => doc.data() as Task);
+    this.tasks.set(tasks);
+  }
+
+  async saveTasksToFirestore(task: Task) {
+    const tasksCollection = collection(this.fireStore, 'tasks');
+    await addDoc(tasksCollection, task);
+  }
+
   changeHandler() {
     if (this.newTaskControl.valid) {
       const value = this.newTaskControl.value.trim();
       if (value !== '') {
-        this.addTask(value);
+        this.taskService.addTask(value);
       }
     }
     this.newTaskControl.reset();
   }
 
-  addTask(title: string) {
-    const newTask = { id: Date.now(), title, completed: false };
-    this.tasks.update((tasks) => [...tasks, newTask]);
-  }
-
   removeTask(index: number) {
-    this.tasks.update((tasks) => tasks.filter((_, i) => i !== index));
+    this.taskService.removeTask(index.toString());
   }
 
   toggleTask(index: number) {
@@ -98,10 +121,10 @@ export class HomeComponent {
   }
 
   changeFilter(filter: FilterTask) {
-    this.filter.set(filter);
+    this.taskService.setFilter(filter);
   }
 
   removeCompleted() {
-    this.tasks.update((tasks) => tasks.filter((task) => !task.completed));
+    this.taskService.removeCompleted();
   }
 }
