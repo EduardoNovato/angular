@@ -1,0 +1,112 @@
+import { Injectable } from '@angular/core';
+import { Task } from '../models/task.interface';
+import { FilterTask } from '../models/filterTask';
+import { Firestore, collection, doc, addDoc, deleteDoc, getDocs } from '@angular/fire/firestore';
+import { signal } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class TaskServiceService {
+  private tasks = signal<Task[]>([]); // Cambio a signal
+  private filter = signal<FilterTask>(FilterTask.All); // Cambio a signal
+
+  tasks$ = this.tasks.asObservable(); // Propiedad pública para exponer el signal de tareas
+  filter$ = this.filter.asObservable(); // Propiedad pública para exponer el signal de filtro
+
+  constructor(private firestore: Firestore) {}
+
+  async loadTasksFromFirebase() {
+    const tasksCollection = collection(this.firestore, 'tasks');
+    const tasksSnapshot = await getDocs(tasksCollection);
+    const tasks: Task[] = tasksSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      title: doc.data()['title'],
+      completed: doc.data()['completed'],
+      editing: doc.data()['editing'] || false,
+    }));
+    this.tasks.set(tasks); // Actualiza el signal
+  }
+
+  addTask(title: string) {
+    const newTask: Task = {
+      id: Date.now().toString(),
+      title,
+      completed: false,
+    };
+    const tasksCollection = collection(this.firestore, 'tasks');
+    addDoc(tasksCollection, newTask).then((docRef) => {
+      const taskWithId = { ...newTask, id: docRef.id };
+      this.tasks.set([...this.tasks(), taskWithId]); // Actualiza el signal
+    });
+  }
+
+  removeTask(id: string) {
+    const taskDocRef = doc(this.firestore, 'tasks', id);
+    deleteDoc(taskDocRef).then(() => {
+      const currentTasks = this.tasks();
+      this.tasks.set(currentTasks.filter((task) => task.id !== id)); // Actualiza el signal
+    });
+  }
+
+  setFilter(filter: FilterTask) {
+    this.filter.set(filter); // Actualiza el signal
+  }
+}
+--------        
+import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { FormControl, Validators } from '@angular/forms';
+import { Firestore, collection, addDoc, getDocs } from '@angular/fire/firestore';
+import { TaskServiceService } from './task-service.service';
+import { Task } from '../models/task.interface';
+import { FilterTask } from '../models/filterTask';
+import { signal, computed } from 'rxjs';
+
+@Component({
+  selector: 'app-home',
+  standalone: true,
+  imports: [], // No necesitas importar módulos aquí
+  templateUrl: './home.component.html',
+  styleUrls: ['./home.component.scss'],
+})
+export class HomeComponent implements OnInit {
+  @ViewChild('editInput', { static: false })
+  editInputRef!: ElementRef<HTMLInputElement>;
+  filterTask = FilterTask;
+  tasks = signal<Task[]>([]); // Cambio a signal
+  filter = signal<FilterTask>(FilterTask.All); // Cambio a signal
+  taskByFilter = computed(() => {
+    const filter = this.filter();
+    const tasks = this.tasks();
+    switch (filter) {
+      case FilterTask.Pending:
+        return tasks.filter((task) => !task.completed);
+      case FilterTask.Completed:
+        return tasks.filter((task) => task.completed);
+      default:
+        return tasks;
+    }
+  });
+  newTaskControl = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required],
+  });
+
+  constructor(private taskService: TaskServiceService, private fireStore: Firestore) {}
+
+  ngOnInit(): void {
+    this.loadTasksFromFirestore();
+  }
+
+  async loadTasksFromFirestore() {
+    const tasksCollection = collection(this.fireStore, 'tasks');
+    const tasksSnapshot = await getDocs(tasksCollection);
+    const tasks: Task[] = tasksSnapshot.docs.map((doc) => doc.data() as Task);
+    this.tasks.set(tasks); // Actualiza el signal
+  }
+
+  async saveTasksToFirestore(task: Task) {
+    const tasksCollection = collection(this.fireStore, 'tasks');
+    await addDoc(tasksCollection, task);
+  }
+}
